@@ -9,5 +9,6 @@ ENV VOSK_SERVER_INTERFACE=0.0.0.0 \
     VOSK_MODEL_PATH=model \
     VOSK_SAMPLE_RATE=48000 \
     RABBITMQ_URL=host.docker.internal \
-    RABBITMQ_PORT=31672
+    RABBITMQ_PORT=31672 \
+    RABBITMQ_QUEUE=transcription
 ENTRYPOINT python3 asr_server.py

@@ -28,6 +28,7 @@ async def recognize(websocket, path):
     global args
     global pool
     global message_conn
+    global queue
 
     loop = asyncio.get_running_loop()
     rec = None
@@ -73,15 +74,11 @@ async def recognize(websocket, path):
         print(response)
         response_dict = json.loads(response).keys()
         if "partial" in response_dict:
-            partial = json.loads(response)["partial"]
-            message_conn.basic_publish(
-                exchange="", routing_key="transcription", body=partial
-            )
+            res = json.dumps({"partial": json.loads(response)["partial"]})
+            message_conn.basic_publish(exchange="", routing_key=queue, body=res)
         if "text" in response_dict:
-            text = json.loads(response)["text"]
-            message_conn.basic_publish(
-                exchange="", routing_key="transcription", body=text
-            )
+            res = json.dumps({"text": json.loads(response)["text"]})
+            message_conn.basic_publish(exchange="", routing_key=queue, body=res)
 
         await websocket.send(response)
         if stop:
@@ -95,6 +92,7 @@ async def start():
     global args
     global pool
     global message_conn
+    global queue
 
     # Enable loging if needed
     #
@@ -114,8 +112,9 @@ async def start():
     )  # used to be 8000 # recent: 16000
     args.max_alternatives = int(os.environ.get("VOSK_ALTERNATIVES", 0))
     args.show_words = bool(os.environ.get("VOSK_SHOW_WORDS", True))
-    args.rabbitmq_url = os.environ.get("RABBITMQ_URL", "0.0.0.0")
+    args.rabbitmq_url = os.environ.get("RABBITMQ_URL", "127.0.0.1")
     args.rabbitmq_port = os.environ.get("RABBITMQ_PORT", "31672")
+    args.rabbitmq_queue = os.environ.get("RABBITMQ_QUEUE", "transcription")
 
     if len(sys.argv) > 1:
         args.model_path = sys.argv[1]
@@ -133,7 +132,8 @@ async def start():
     message_conn = pika.BlockingConnection(
         pika.ConnectionParameters(args.rabbitmq_url, args.rabbitmq_port)
     ).channel()
-    message_conn.queue_declare(queue="transcription", durable=True)
+    queue = args.rabbitmq_queue
+    message_conn.queue_declare(queue=queue, durable=True)
     # message_conn.queue_declare(queue="transcription", durable=True)
 
     pool = concurrent.futures.ThreadPoolExecutor((os.cpu_count() or 1))
