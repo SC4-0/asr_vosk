@@ -28,7 +28,7 @@ async def recognize(websocket, path):
     global args
     global pool
     global message_conn
-    global queue
+    global exchange
 
     loop = asyncio.get_running_loop()
     rec = None
@@ -75,10 +75,10 @@ async def recognize(websocket, path):
         response_dict = json.loads(response).keys()
         if "partial" in response_dict:
             res = json.dumps({"partial": json.loads(response)["partial"]})
-            message_conn.basic_publish(exchange="", routing_key=queue, body=res)
+            message_conn.basic_publish(exchange=exchange, routing_key="", body=res)
         if "text" in response_dict:
             res = json.dumps({"text": json.loads(response)["text"]})
-            message_conn.basic_publish(exchange="", routing_key=queue, body=res)
+            message_conn.basic_publish(exchange=exchange, routing_key="", body=res)
 
         await websocket.send(response)
         if stop:
@@ -92,7 +92,7 @@ async def start():
     global args
     global pool
     global message_conn
-    global queue
+    global exchange
 
     # Enable loging if needed
     #
@@ -114,7 +114,9 @@ async def start():
     args.show_words = bool(os.environ.get("VOSK_SHOW_WORDS", True))
     args.rabbitmq_url = os.environ.get("RABBITMQ_URL", "127.0.0.1")
     args.rabbitmq_port = os.environ.get("RABBITMQ_PORT", "31672")
-    args.rabbitmq_queue = os.environ.get("RABBITMQ_QUEUE", "transcription")
+    args.rabbitmq_exchange = os.environ.get("RABBITMQ_EXCHANGE", "transcription")
+    args.heartbeat = os.environ.get("RABBITMQ_HEARTBEAT", 600)
+    args.blocked_connection_timeout = os.environ.get("RABBITMQ_BLOCKED_TIMEOUT", 300)
 
     if len(sys.argv) > 1:
         args.model_path = sys.argv[1]
@@ -130,11 +132,18 @@ async def start():
     model = Model(args.model_path)
     spk_model = SpkModel(args.spk_model_path) if args.spk_model_path else None
     message_conn = pika.BlockingConnection(
-        pika.ConnectionParameters(args.rabbitmq_url, args.rabbitmq_port)
+        pika.ConnectionParameters(
+            args.rabbitmq_url,
+            args.rabbitmq_port,
+            heartbeat=args.heartbeat,
+            blocked_connection_timeout=args.blocked_connection_timeout,
+        )
     ).channel()
-    queue = args.rabbitmq_queue
-    message_conn.queue_declare(queue=queue, durable=True)
-    # message_conn.queue_declare(queue="transcription", durable=True)
+    exchange = args.rabbitmq_exchange
+    message_conn.exchange_declare(exchange=exchange, exchange_type="fanout")
+    # q = message_conn.queue_declare(queue="", exclusive=True)
+    # message_conn.queue_bind(exchange=queue, queue=q.method.queue)
+    # message_conn.queue_declare(queue=queue, durable=True)
 
     pool = concurrent.futures.ThreadPoolExecutor((os.cpu_count() or 1))
 
