@@ -115,8 +115,10 @@ async def start():
     args.rabbitmq_url = os.environ.get("RABBITMQ_URL", "127.0.0.1")
     args.rabbitmq_port = os.environ.get("RABBITMQ_PORT", "31672")
     args.rabbitmq_exchange = os.environ.get("RABBITMQ_EXCHANGE", "transcription")
-    args.heartbeat = os.environ.get("RABBITMQ_HEARTBEAT", 600)
-    args.blocked_connection_timeout = os.environ.get("RABBITMQ_BLOCKED_TIMEOUT", 300)
+    args.heartbeat = int(os.environ.get("RABBITMQ_HEARTBEAT", 600))
+    args.blocked_connection_timeout = int(
+        os.environ.get("RABBITMQ_BLOCKED_TIMEOUT", 300)
+    )
 
     if len(sys.argv) > 1:
         args.model_path = sys.argv[1]
